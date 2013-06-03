@@ -21,8 +21,13 @@ module.exports = class SwiftPromise
       whenKept = whenKept.onFulfilled
     new SwiftPromise (cb) => 
       deferred = {whenKept, whenBroken, cb}
-      return @deferreds.push deferred if @finalState is undefined
-      return setImmediate => call deferred, @finalState
+      return (setImmediate => call deferred, @finalState) unless @finalState is undefined
+      return @deferreds.push deferred
+      return placeDeferred deferred, @ # don't use it, because it's not covered by tests
+
+placeDeferred = (deferred, promise) ->
+  promise = promise.state[1] while promise.state and promise.state[1] instanceof SwiftPromise
+  promise.deferreds.push deferred
 
 class RejectedPromise extends SwiftPromise
   constructor: (reason) ->
