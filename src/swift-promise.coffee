@@ -24,6 +24,26 @@ module.exports = class SwiftPromise
       return @deferreds.push deferred if @finalState is undefined
       return setImmediate => call deferred, @finalState
 
+class RejectedPromise extends SwiftPromise
+  constructor: (reason) ->
+    @deferreds = []
+    @callbacks = []
+    @finalState = @state = [false, reason]
+
+class FulfilledPromise extends SwiftPromise
+  constructor: (value) ->
+    @deferreds = []
+    @callbacks = []
+    @finalState = undefined
+    @state = [true, value]
+    resolve @, @state, (resolvedState) => 
+      @finalState = resolvedState
+      cb @finalState while cb = @callbacks.shift()
+      call deferred, @finalState while deferred = @deferreds.shift()
+
+SwiftPromise.return = (value) -> new FulfilledPromise value
+SwiftPromise.throw = (value) -> new RejectedPromise value
+
 resolve = (returnedPromise, [kept, value], cb) ->
   return cb [false, new TypeError "Cannot resolve with returned promise."] if value is returnedPromise
   if value instanceof SwiftPromise

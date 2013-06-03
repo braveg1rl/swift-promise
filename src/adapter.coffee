@@ -7,3 +7,5 @@ module.exports =
       pending.fulfill = (value) -> cb null, value
       pending.reject = (error) -> cb error, null, true
     pending
+  fulfilled: SwiftPromise.return
+  rejected: SwiftPromise.throw
