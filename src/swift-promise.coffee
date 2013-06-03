@@ -13,7 +13,7 @@ module.exports = class SwiftPromise
         @finalState = resolvedState
         cb @finalState while cb = @callbacks.shift()
         call deferred, @finalState while deferred = @deferreds.shift()
-    try fn resultCB catch error then resultCB err
+    try fn resultCB catch error then resultCB error
 
   then: (whenKept, whenBroken) ->
     if whenKept? and typeof whenKept is "object" and (whenKept.onFulfilled or whenKept.onRejected)
