@@ -8,6 +8,7 @@ watch:
 	
 test:
 	node_modules/.bin/mocha
+	node_modules/.bin/promises-aplus-tests lib/adapter.js
 
 jumpstart:
 	curl -u 'meryn' https://api.github.com/user/repos -d '{"name":"swift-promise", "description":"Fast, Promises/A+ compliant promises.","private":false}'

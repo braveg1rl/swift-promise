@@ -12,10 +12,13 @@
     "url": "git://github.com/meryn/swift-promise.git"
   },
   "private": false,
-  "dependencies": {},
+  "dependencies": {
+    "setimmediate": "~1.0.1"
+  },
   "devDependencies": {
     "coffee-script": "~1.6.2",
-    "mocha": "1.x.x"
+    "mocha": "1.x.x",
+    "promises-aplus-tests": "git://github.com/promises-aplus/promises-tests.git#spec-1.1"
   },
   "optionalDependencies": {},
   "engines": {
