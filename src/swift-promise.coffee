@@ -10,23 +10,34 @@ module.exports = class SwiftPromise
     @state = 0
     @value = undefined
     @callbacks = []
+    @dependents = []
+    return unless fn
     resultCB = (err, result, forceError = false) =>
-      if err or forceError
-        @settleOn REJECTED, err
-      else
-        @resolve result
+      if err or forceError then @settleOn REJECTED, err else @resolve result
     try fn resultCB catch error then resultCB error, null, true
 
   then: (onFulfilled, onRejected) ->
-    cb = if typeof onFulfilled is "function" then onFulfilled else null
-    eb = if typeof onRejected is "function" then onRejected else null
-    new SwiftDeferred @, cb, eb
+    dependent = 
+      promise: new SwiftPromise
+      cb: if typeof onFulfilled is "function" then onFulfilled else null
+      eb: if typeof onRejected is "function" then onRejected else null
+    if @state > 1 then setImmediate => @callDependent dependent else @dependents.push dependent
+    dependent.promise
   
   settleOn: (state, value) ->
     return if @state > 1
     @state = state
     @value = value
     callback() while callback = @callbacks.shift()
+    @callDependent dependent while dependent = @dependents.shift()
+    
+  callDependent: (d) ->
+    fn = if @state is FULFILLED then d.cb else d.eb
+    unless fn
+      switch @state
+        when FULFILLED then d.promise.resolve @value 
+        when REJECTED then d.promise.settleOn REJECTED, @value
+    try d.promise.resolve fn @value catch e then d.promise.settleOn REJECTED, e
   
   fulfill: (x) ->
     @resolve x unless @state
@@ -68,24 +79,12 @@ class FulfilledPromise extends SwiftPromise
     @state = 0
     @value = undefined
     @callbacks = []
+    @dependents = []
     @resolve val
 
 class RejectedPromise extends SwiftPromise
   constructor: (val) ->
     @state = REJECTED
     @value = val
+    @dependents = []
     @callbacks = []
-
-class SwiftDeferred extends SwiftPromise
-  constructor: (depp, cb, eb) ->
-    @state = 0
-    @value = undefined
-    @callbacks = []
-    work = =>
-      fn = if depp.state is FULFILLED then cb else eb
-      unless fn
-        switch depp.state
-          when FULFILLED then @resolve depp.value 
-          when REJECTED then @settleOn REJECTED, depp.value
-      try @resolve fn depp.value catch e then @settleOn REJECTED, e
-    if depp.state > 1 then setImmediate work else depp.callbacks.push work
