@@ -1,81 +1,91 @@
 require "setimmediate"
 
+PENDING = 0
+WAITING = 1
+FULFILLED = 2
+REJECTED = 3
+
 module.exports = class SwiftPromise
-  constructor: (fn)->
-    @state = undefined
-    @finalState = undefined
-    @deferreds = []
+  constructor: (fn) ->
+    @state = 0
+    @value = undefined
     @callbacks = []
-    resultCB = (err, result, forceError=false) =>
-      return unless @state is undefined
-      @state = if err or forceError then [false, err] else [true, result]
-      resolve @, @state, (resolvedState) => 
-        @finalState = resolvedState
-        cb @finalState while cb = @callbacks.shift()
-        call deferred, @finalState while deferred = @deferreds.shift()
-    try fn resultCB catch error then resultCB error
+    resultCB = (err, result, forceError = false) =>
+      if err or forceError
+        @settleOn REJECTED, err
+      else
+        @resolve result
+    try fn resultCB catch error then resultCB error, null, true
 
-  then: (whenKept, whenBroken) ->
-    if whenKept? and typeof whenKept is "object" and (whenKept.onFulfilled or whenKept.onRejected)
-      whenBroken = whenKept.onRejected
-      whenKept = whenKept.onFulfilled
-    new SwiftPromise (cb) => 
-      deferred = {whenKept, whenBroken, cb}
-      return (setImmediate => call deferred, @finalState) unless @finalState is undefined
-      return @deferreds.push deferred
-      return placeDeferred deferred, @ # don't use it, because it's not covered by tests
+  then: (onFulfilled, onRejected) ->
+    cb = if typeof onFulfilled is "function" then onFulfilled else null
+    eb = if typeof onRejected is "function" then onRejected else null
+    new SwiftDeferred @, cb, eb
+  
+  settleOn: (state, value) ->
+    return if @state > 1
+    @state = state
+    @value = value
+    callback() while callback = @callbacks.shift()
+  
+  fulfill: (x) ->
+    @resolve x unless @state
 
-placeDeferred = (deferred, promise) ->
-  promise = promise.state[1] while promise.state and promise.state[1] instanceof SwiftPromise
-  promise.deferreds.push deferred
+  reject: (reason) -> 
+    @settleOn REJECTED, reason unless @state
 
-class RejectedPromise extends SwiftPromise
-  constructor: (reason) ->
-    @deferreds = []
-    @callbacks = []
-    @finalState = @state = [false, reason]
+  resolve: (x) ->
+    return if @state > 1
+    @state = WAITING
+    if x instanceof SwiftPromise
+      return @settleOn REJECTED, new TypeError "You may not fulfill a promise with itself." if x is @
+      return @settleOn x.state, x.value if x.state > 1
+      return x.callbacks.push => @settleOn x.state, x.value
+    return @settleOn FULFILLED, x if not x
+    return @settleOn FULFILLED, x unless typeof x in ["object","function"]
+    try xThen = x.then catch err then return @settleOn REJECTED, err
+    @settleOn FULFILLED, x unless typeof xThen is "function"
+    resolver = makeResolver @, x
+    try xThen.call x, resolver.fulfill, resolver.reject
+    catch err then resolver.reject err
+
+makeResolver = (promise, x) ->
+  resolved = false
+  fulfill: (value) ->
+    return if resolved
+    resolved = true
+    if value is x then  promise.settleOn FULFILLED, value else promise.resolve value
+  reject: (reason) ->
+    return if resolved
+    resolved = true
+    promise.settleOn REJECTED, reason
+
+SwiftPromise.return = (val) -> new FulfilledPromise val
+SwiftPromise.throw = (val) -> new RejectedPromise val
 
 class FulfilledPromise extends SwiftPromise
-  constructor: (value) ->
-    @deferreds = []
+  constructor: (val) ->
+    @state = 0
+    @value = undefined
     @callbacks = []
-    @finalState = undefined
-    @state = [true, value]
-    resolve @, @state, (resolvedState) => 
-      @finalState = resolvedState
-      cb @finalState while cb = @callbacks.shift()
-      call deferred, @finalState while deferred = @deferreds.shift()
+    @resolve val
 
-SwiftPromise.return = (value) -> new FulfilledPromise value
-SwiftPromise.throw = (value) -> new RejectedPromise value
+class RejectedPromise extends SwiftPromise
+  constructor: (val) ->
+    @state = REJECTED
+    @value = val
+    @callbacks = []
 
-resolve = (returnedPromise, [kept, value], cb) ->
-  return cb [false, new TypeError "Cannot resolve with returned promise."] if value is returnedPromise
-  if value instanceof SwiftPromise
-    return cb value.finalState if value.finalState
-    return value.callbacks.push cb
-  else
-    return cb [false, value] unless kept
-    return cb [true, value] if not value
-    return cb [true, value] unless typeof value in ["object","function"]
-    try thenFn = value.then catch error then return cb [false, error]
-    return cb [true, value] unless typeof thenFn is "function"
-    resolved = false
-    try
-      thenFn.call(
-        value
-        (result) -> 
-          return if resolved
-          resolved = true
-          resolve returnedPromise, [true, result], cb
-        (err) -> cb [false, err] unless resolved )
-    catch error then cb [false, error] unless resolved
-
-call = (deferred, [kept, value]) ->
-  if deferred.cb
-    cb = if kept then deferred.whenKept else deferred.whenBroken
-    if typeof cb is "function"
-      return try deferred.cb null, cb value catch err then deferred.cb err, null, true
-    if kept then deferred.cb null, value else deferred.cb value, null, true
-  else
-    if kept then deferred.whenKept value else deferred.whenBroken value
+class SwiftDeferred extends SwiftPromise
+  constructor: (depp, cb, eb) ->
+    @state = 0
+    @value = undefined
+    @callbacks = []
+    work = =>
+      fn = if depp.state is FULFILLED then cb else eb
+      unless fn
+        switch depp.state
+          when FULFILLED then @resolve depp.value 
+          when REJECTED then @settleOn REJECTED, depp.value
+      try @resolve fn depp.value catch e then @settleOn REJECTED, e
+    if depp.state > 1 then setImmediate work else depp.callbacks.push work
