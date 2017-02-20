@@ -16,8 +16,8 @@
     "setimmediate": "~1.0.1"
   },
   "devDependencies": {
-    "coffee-script": "~1.6.2",
-    "mocha": "1.x.x",
+    "coffee-script": "~1.12.4",
+    "mocha": "^3.2.0",
     "promises-aplus-tests": "git://github.com/promises-aplus/promises-tests.git#spec-1.1"
   },
   "optionalDependencies": {},
