@@ -1,5 +1,7 @@
 # swift-promise [![Build Status](https://travis-ci.org/meryn/swift-promise.png?branch=master)](https://travis-ci.org/meryn/swift-promise) [![Dependency Status](https://david-dm.org/meryn/swift-promise.png)](https://david-dm.org/meryn/swift-promise)
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/braveg1rl/swift-promise.svg)](https://greenkeeper.io/)
+
 Fast, Promises/A+ compliant promises.
 
 ## Usage
